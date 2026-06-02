@@ -22,9 +22,9 @@
 
 <div class="container">
     <h1>Gerador Lotofácil Estratégico</h1>
-    <div class="status" id="statusConcurso">🔄 Buscando resultados em banco de dados aberto...</div>
+    <div class="status" id="statusConcurso">🔄 Ativando túnel de conexão anti-bloqueio...</div>
 
-    <button id="btnGerar" onclick="gerarAposta()" disabled>Carregando Resultados...</button>
+    <button id="btnGerar" onclick="gerarAposta()" disabled>Carregando Resultados Oficiais...</button>
 
     <div class="resultado" id="resultadoArea" style="display:none;">
         <h3>Seu Jogo Gerado:</h3>
@@ -41,27 +41,33 @@ async function carregarResultados() {
     const btn = document.getElementById('btnGerar');
     
     try {
-        // Consulta o repositório de dados estáticos sem restrições de CORS
-        const url = 'https://githubusercontent.com';
-        const resposta = await fetch(url);
-        if (!resposta.ok) throw new Error('Erro ao baixar JSON');
+        // Alvo: Banco de dados público atualizado diariamente
+        const urlAlvo = 'https://githubusercontent.com';
         
-        const dados = await resposta.json();
+        // Túnel Proxy que quebra o bloqueio de CORS do navegador automaticamente
+        const urlProxy = `https://allorigins.win{encodeURIComponent(urlAlvo)}`;
         
-        // O repositório armazena os jogos ordenados por chave identificadora do concurso
+        const respostaProxy = await fetch(urlProxy);
+        if (!respostaProxy.ok) throw new Error('Erro no servidor proxy intermediário');
+        
+        const jsonEmbrulhado = await respostaProxy.json();
+        
+        // Desembrulha o conteúdo de texto limpo retornado pelo proxy e converte em objeto javascript
+        const dados = JSON.parse(jsonEmbrulhado.contents);
+        
+        // Ordena os concursos mapeados de forma decrescente (do mais recente para o mais antigo)
         const chavesOrdenadas = Object.keys(dados).sort((a, b) => Number(b) - Number(a));
         
-        // Extrai as dezenas dos últimos 7 concursos oficiais mapeados
+        // Extrai os 7 últimos resultados reais salvos
         for (let i = 0; i < 7; i++) {
             if (dados[chavesOrdenadas[i]]) {
-                // Converte a string ou lista de dezenas para um array de números inteiros
                 let dezenas = dados[chavesOrdenadas[i]].split('-').map(Number);
                 listaConcursos.push(dezenas);
             }
         }
 
         const ultimoConcursoNum = chavesOrdenadas[0];
-        statusText.innerHTML = `✅ Resultados carregados automaticamente! Último concurso: <strong>Nº ${ultimoConcursoNum}</strong>`;
+        statusText.innerHTML = `✅ Resultados carregados via proxy! Último concurso ativo: <strong>Nº ${ultimoConcursoNum}</strong>`;
         statusText.style.background = '#e8f5e9';
         statusText.style.color = '#208d45';
         
@@ -69,7 +75,7 @@ async function carregarResultados() {
         btn.disabled = false;
     } catch (erro) {
         console.error(erro);
-        statusText.innerHTML = "❌ Erro crítico de comunicação. Recarregue a página em alguns instantes.";
+        statusText.innerHTML = "❌ Ocorreu uma lentidão na rede de dados pública. Atualize a página.";
         statusText.style.background = '#ffebee';
         statusText.style.color = '#c62828';
     }
@@ -81,14 +87,14 @@ function gerarAposta() {
     const ultimoResultado = listaConcursos[0];
     let escolhidos = [];
 
-    // 1. Escolhe 9 dezenas aleatórias do último sorteio realizado
+    // 1. Sorteia 9 dezenas aleatórias extraídas diretamente do último sorteio
     let poolUltimo = [...ultimoResultado];
     while(escolhidos.length < 9 && poolUltimo.length > 0) {
         let idx = Math.floor(Math.random() * poolUltimo.length);
         escolhidos.push(poolUltimo.splice(idx, 1)[0]);
     }
 
-    // 2. Descobre números não sorteados no último concurso (para sortear 3 dezenas delas)
+    // 2. Localiza números não sorteados no último concurso (para puxar 3 dezenas deles)
     let todosNumeros = Array.from({length: 25}, (_, i) => i + 1);
     let naoSorteadosUltimo = todosNumeros.filter(n => !ultimoResultado.includes(n));
 
@@ -98,7 +104,7 @@ function gerarAposta() {
         escolhidos.push(poolNaoSorteados.splice(idx, 1)[0]);
     }
 
-    // 3. Mapeia a frequência de saídas no histórico acumulado
+    // 3. Avalia o peso de repetição das dezenas nos últimos 7 concursos coletados
     let frequencias = {};
     todosNumeros.forEach(n => frequencias[n] = 0);
     
@@ -106,20 +112,20 @@ function gerarAposta() {
         concurso.forEach(num => { if(frequencias[num] !== undefined) frequencias[num]++; });
     });
 
-    // Filtra dezenas ordenando por maior ocorrência e removendo as já escolhidas
+    // Filtra pelos maiores índices de frequência descartando duplicatas com grupos anteriores
     let maisQuentesDisponiveis = todosNumeros
         .filter(n => !escolhidos.includes(n))
         .sort((a, b) => frequencias[b] - frequencias[a]);
 
-    // Preenche as 3 vagas remanescentes com as mais quentes
+    // Preenche as 3 posições finais do bilhete com as mais quentes
     for(let i = 0; i < 3; i++) {
         if(maisQuentesDisponiveis[i]) escolhidos.push(maisQuentesDisponiveis[i]);
     }
 
-    // Ordena o jogo final em ordem matemática crescente
+    // Ordena o jogo gerado
     escolhidos.sort((a, b) => a - b);
 
-    // Renderiza as bolas numéricas e cria o botão dinâmico para WhatsApp
+    // Apresenta graficamente o bilhete e vincula o redirecionamento ao WhatsApp
     const resultadoArea = document.getElementById('resultadoArea');
     const dezenasSorteadas = document.getElementById('dezenasSorteadas');
     dezenasSorteadas.innerHTML = '';
