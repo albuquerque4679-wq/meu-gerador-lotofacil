@@ -9,8 +9,10 @@
         .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         h1 { color: #208d45; margin-bottom: 5px; }
         .status { font-size: 14px; color: #666; margin-bottom: 20px; padding: 10px; background: #eee; border-radius: 5px; display: inline-block; width: 90%; box-sizing: border-box; }
-        button { background-color: #208d45; color: white; border: none; padding: 15px 20px; font-size: 18px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s; }
+        button { background-color: #208d45; color: white; border: none; padding: 15px 20px; font-size: 18px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s; margin-bottom: 10px; }
         button:hover { background-color: #166631; }
+        .btn-whats { background-color: #25d366; font-size: 16px; padding: 12px 20px; text-decoration: none; color: white; display: inline-block; border-radius: 5px; font-weight: bold; width: 93%; margin-top: 15px; transition: 0.2s; }
+        .btn-whats:hover { background-color: #128c7e; }
         .resultado { margin-top: 25px; padding: 20px; background: #e8f5e9; border-radius: 8px; border: 2px dashed #208d45; }
         .bola { display: inline-block; width: 38px; height: 38px; background: #208d45; color: white; border-radius: 50%; line-height: 38px; font-weight: bold; margin: 5px; font-size: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
         textarea { width: 100%; height: 100px; margin-top: 10px; padding: 10px; border-radius: 5px; border: 1px solid #ccc; font-family: monospace; box-sizing: border-box; }
@@ -23,7 +25,6 @@
     <h1>Gerador Lotofácil Estratégico</h1>
     <div class="status" id="statusConcurso">🔄 Tentando conexão segura com banco de dados de loterias...</div>
 
-    <!-- Painel de contingência caso ocorra bloqueio de rede/CORS -->
     <div class="manual-panel" id="painelManual">
         <strong style="color: #856404;">⚠️ Modo Manual Ativado (Bloqueio de CORS detectado):</strong>
         <p style="font-size: 13px; margin: 5px 0;">Copie os últimos resultados e cole abaixo (um por linha):</p>
@@ -41,6 +42,9 @@
     <div class="resultado" id="resultadoArea" style="display:none;">
         <h3>Seu Jogo Gerado:</h3>
         <div id="dezenasSorteadas"></div>
+        
+        <!-- O Link do WhatsApp será injetado dinamicamente aqui -->
+        <div id="areaCompartilhar"></div>
     </div>
 </div>
 
@@ -50,8 +54,6 @@ let usandoModoManual = false;
 
 async function carregarResultados() {
     const statusText = document.getElementById('statusConcurso');
-    
-    // Lista de APIs alternativas para tentar contornar falhas
     const urls = [
         'https://herokuapp.com',
         'https://guidi.dev.br'
@@ -61,10 +63,8 @@ async function carregarResultados() {
         try {
             const resposta = await fetch(url);
             if (!resposta.ok) continue;
-            
             const dados = await resposta.json();
             
-            // Tratamento caso a API retorne a lista estruturada de multiplos concursos
             if (Array.isArray(dados)) {
                 listaConcursos = dados.slice(0, 7).map(c => c.dezenas.map(Number));
                 statusText.innerHTML = `✅ Resultados carregados automaticamente via API!`;
@@ -72,20 +72,18 @@ async function carregarResultados() {
                 listaConcursos = dados.concursos.slice(0, 7).map(c => c.dezenas.map(Number));
                 statusText.innerHTML = `✅ Resultados carregados via Banco Alternativo!`;
             } else {
-                continue; // Tenta a próxima url da lista se o formato for desconhecido
+                continue;
             }
-            
             statusText.style.background = '#e8f5e9';
             statusText.style.color = '#208d45';
-            return; // Sucesso, encerra a função
+            return;
         } catch (e) {
             console.warn("Falha ao tentar endpoint: " + url);
         }
     }
 
-    // Se todas as APIs falharem por CORS, ativa o plano B transparente para o usuário
     usandoModoManual = true;
-    statusText.innerHTML = `⚠️ Conexão direta bloqueada pelo navegador. Usando dados integrados abaixo.`;
+    statusText.innerHTML = `⚠️ Conexão direta bloqueada. Usando dados manuais/padrão abaixo.`;
     statusText.style.background = '#fff3cd';
     statusText.style.color = '#856404';
     document.getElementById('painelManual').style.display = 'block';
@@ -96,7 +94,7 @@ function gerarAposta() {
         const texto = document.getElementById('txtHistorico').value.trim();
         const linhas = texto.split('\n');
         if (linhas.length < 7) {
-            alert("Por favor, certifique-se de que há pelo menos 7 linhas de resultados no campo.");
+            alert("Por favor, garanta pelo menos 7 linhas de resultados.");
             return;
         }
         listaConcursos = linhas.map(linha => {
@@ -104,22 +102,17 @@ function gerarAposta() {
         });
     }
 
-    if (listaConcursos.length < 7) {
-        alert("Aguardando carregamento dos dados históricos.");
-        return;
-    }
+    if (listaConcursos.length < 7) return;
 
     const ultimoResultado = listaConcursos[0];
     let escolhidos = [];
 
-    // 1. Sorteia 9 números aleatórios do último resultado
     let poolUltimo = [...ultimoResultado];
     while(escolhidos.length < 9 && poolUltimo.length > 0) {
         let idx = Math.floor(Math.random() * poolUltimo.length);
         escolhidos.push(poolUltimo.splice(idx, 1)[0]);
     }
 
-    // 2. Descobre números não sorteados no último concurso (precisa escolher 3)
     let todosNumeros = Array.from({length: 25}, (_, i) => i + 1);
     let naoSorteadosUltimo = todosNumeros.filter(n => !ultimoResultado.includes(n));
 
@@ -129,41 +122,46 @@ function gerarAposta() {
         escolhidos.push(poolNaoSorteados.splice(idx, 1)[0]);
     }
 
-    // 3. Mapeia a frequência de saídas no histórico coletado
     let frequencias = {};
     todosNumeros.forEach(n => frequencias[n] = 0);
-    
     listaConcursos.forEach(concurso => {
         concurso.forEach(num => { if(frequencias[num] !== undefined) frequencias[num]++; });
     });
 
-    // Filtra os mais frequentes descartando os que já foram inseridos nas outras regras
     let maisQuentesDisponiveis = todosNumeros
         .filter(n => !escolhidos.includes(n))
         .sort((a, b) => frequencias[b] - frequencias[a]);
 
-    // Completa o bilhete até fechar as 15 dezenas (pega os 3 mais quentes restantes)
     for(let i = 0; i < 3; i++) {
         if(maisQuentesDisponiveis[i]) escolhidos.push(maisQuentesDisponiveis[i]);
     }
 
-    // Ordena o bilhete final
     escolhidos.sort((a, b) => a - b);
 
-    // Mostra as dezenas geradas na tela
     const resultadoArea = document.getElementById('resultadoArea');
     const dezenasSorteadas = document.getElementById('dezenasSorteadas');
     dezenasSorteadas.innerHTML = '';
     
-    escolhidos.forEach(num => {
+    let textoWhats = "🍀 *Jogo Gerado para Lotofácil* 🍀\n\n🟢 Dezenas: ";
+
+    escolhidos.forEach((num, index) => {
         let strNum = num < 10 ? '0' + num : num;
         dezenasSorteadas.innerHTML += `<span class="bola">${strNum}</span>`;
+        textoWhats += (index === escolhidos.length - 1) ? `${strNum}` : `${strNum} - `;
     });
+    
+    textoWhats += "\n\n_Gerado de forma estratégica via App Lotofácil_";
+    
+    // Cria o link codificado para o WhatsApp
+    const linkWhatsApp = `https://whatsapp.com{encodeURIComponent(textoWhats)}`;
+    
+    // Desenha o botão na tela
+    const areaCompartilhar = document.getElementById('areaCompartilhar');
+    areaCompartilhar.innerHTML = `<a href="${linkWhatsApp}" target="_blank" class="btn-whats">📲 Enviar Jogo no WhatsApp</a>`;
     
     resultadoArea.style.display = 'block';
 }
 
-// Inicializa a verificação ao abrir a página
 carregarResultados();
 </script>
 </body>
