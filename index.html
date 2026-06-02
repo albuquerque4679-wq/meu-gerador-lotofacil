@@ -3,34 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador Estratégico Lotofácil</title>
+    <title>Gerador Automático Lotofácil</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; text-align: center; }
         .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        h1 { color: #208d45; }
-        textarea { width: 100%; height: 120px; margin-bottom: 15px; padding: 10px; border-radius: 5px; border: 1px solid #ccc; font-family: monospace; }
-        button { background-color: #208d45; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
+        h1 { color: #208d45; margin-bottom: 5px; }
+        .status { font-size: 14px; color: #666; margin-bottom: 20px; padding: 8px; background: #eee; border-radius: 5px; display: inline-block; }
+        button { background-color: #208d45; color: white; border: none; padding: 15px 20px; font-size: 18px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s; }
         button:hover { background-color: #166631; }
-        .resultado { margin-top: 20px; padding: 15px; background: #e8f5e9; border-radius: 5px; }
-        .bola { display: inline-block; width: 35px; height: 35px; background: #208d45; color: white; border-radius: 50%; line-height: 35px; font-weight: bold; margin: 5px; font-size: 16px; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        .resultado { margin-top: 25px; padding: 20px; background: #e8f5e9; border-radius: 8px; border: 2px dashed #208d45; }
+        .bola { display: inline-block; width: 38px; height: 38px; background: #208d45; color: white; border-radius: 50%; line-height: 38px; font-weight: bold; margin: 5px; font-size: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Gerador Lotofácil Estratégico</h1>
-    <p>Insira os resultados dos <strong>últimos 7 concursos</strong> (um por linha, números separados por espaço ou vírgula):</p>
-    <p style="font-size: 12px; color: #666;">O primeiro da lista deve ser o mais recente.</p>
-    
-    <textarea id="historico">01,02,03,04,05,06,07,08,09,10,11,12,13,14,15
-02,03,04,05,06,07,08,09,10,11,12,13,14,15,16
-03,04,05,06,07,08,09,10,11,12,13,14,15,16,17
-04,05,06,07,08,09,10,11,12,13,14,15,16,17,18
-05,06,07,08,09,10,11,12,13,14,15,16,17,18,19
-06,07,08,09,10,11,12,13,14,15,16,17,18,19,20
-07,08,09,10,11,12,13,14,15,16,17,18,19,20,21</textarea>
+    <h1>Gerador Lotofácil Automático</h1>
+    <div class="status" id="statusConcurso">🔄 Conectando à API da Caixa...</div>
 
-    <button onclick="gerarAposta()">Gerar Jogo Perfeito</button>
+    <button id="btnGerar" onclick="gerarAposta()" disabled>Carregando Resultados...</button>
 
     <div class="resultado" id="resultadoArea" style="display:none;">
         <h3>Seu Jogo Gerado:</h3>
@@ -39,67 +31,84 @@
 </div>
 
 <script>
-function gerarAposta() {
-    const texto = document.getElementById('historico').value.trim();
-    const linhas = texto.split('\n');
+let listaConcursos = [];
+
+// Função que busca os dados da internet assim que a página abre
+async function carregarResultados() {
+    const statusText = document.getElementById('statusConcurso');
+    const btn = document.getElementById('btnGerar');
     
-    if (linhas.length < 7) {
-        alert("Por favor, insira exatamente os últimos 7 concursos.");
-        return;
+    try {
+        // Consome uma API pública e gratuita de loterias
+        const resposta = response = await fetch('https://guidi.dev.br');
+        if (!resposta.ok) throw new Error('Erro na requisição');
+        
+        const dados = await resposta.json();
+        
+        // Formata os dados recebidos para o nosso algoritmo
+        listaConcursos = dados.map(c => c.dezenas.map(Number));
+        
+        const ultimoConcursoNum = dados[0].concurso;
+        statusText.innerHTML = `✅ Conectado! Último concurso carregado: <strong>Nº ${ultimoConcursoNum}</strong>`;
+        statusText.style.background = '#e8f5e9';
+        statusText.style.color = '#208d45';
+        
+        btn.innerText = "Gerar Jogo Perfeito";
+        btn.disabled = false;
+    } catch (erro) {
+        console.error(erro);
+        statusText.innerHTML = "❌ Erro ao buscar resultados. Tente atualizar a página.";
+        statusText.style.background = '#ffebee';
+        statusText.style.color = '#c62828';
+        btn.innerText = "Falha ao carregar";
     }
+}
 
-    // Processar os números de cada concurso
-    const concursos = linhas.map(linha => {
-        return linha.replace(/[^0-9]/g, ' ').split(/\s+/).map(Number).filter(n => n >= 1 && n <= 25);
-    });
+function gerarAposta() {
+    if (listaConcursos.length < 7) return;
 
-    const ultimoResultado = concursos[0];
-    if (ultimoResultado.length !== 15) {
-        alert("O último concurso precisa ter exatamente 15 dezenas.");
-        return;
-    }
-
+    const ultimoResultado = listaConcursos[0];
     let escolhidos = [];
 
-    // 1. Escolher 9 números aleatórios do último resultado
+    // 1. Sorteia 9 números aleatórios do último resultado
     let poolUltimo = [...ultimoResultado];
     while(escolhidos.length < 9) {
         let idx = Math.floor(Math.random() * poolUltimo.length);
         escolhidos.push(poolUltimo.splice(idx, 1)[0]);
     }
 
-    // 2. Descobrir números não sorteados no último concurso
+    // 2. Descobre números não sorteados no último concurso (Sorteia 3 deles)
     let todosNumeros = Array.from({length: 25}, (_, i) => i + 1);
     let naoSorteadosUltimo = todosNumeros.filter(n => !ultimoResultado.includes(n));
 
-    // Escolher 3 números aleatórios dos não sorteados
     let poolNaoSorteados = [...naoSorteadosUltimo];
     while(escolhidos.length < 12) {
         let idx = Math.floor(Math.random() * poolNaoSorteados.length);
         escolhidos.push(poolNaoSorteados.splice(idx, 1)[0]);
     }
 
-    // 3. Contar dezenas mais quentes dos últimos 7 concursos
+    // 3. Mapeia a frequência de saídas nos últimos 7 concursos
     let frequencias = {};
     todosNumeros.forEach(n => frequencias[n] = 0);
-    concursos.slice(0, 7).forEach(concurso => {
+    
+    listaConcursos.forEach(concurso => {
         concurso.forEach(num => { if(frequencias[num] !== undefined) frequencias[num]++; });
     });
 
-    // Ordenar os números restantes pelos mais frequentes
+    // Filtra para pegar os mais frequentes excluindo os que já foram selecionados
     let maisQuentesDisponiveis = todosNumeros
         .filter(n => !escolhidos.includes(n))
         .sort((a, b) => frequencias[b] - frequencias[a]);
 
-    // Adicionar os 3 mais quentes que restaram
+    // Adiciona as 3 dezenas mais quentes restantes
     for(let i = 0; i < 3; i++) {
-        escolhidos.push(maisQuentesDisponiveis[i]);
+        if(maisQuentesDisponiveis[i]) escolhidos.push(maisQuentesDisponiveis[i]);
     }
 
-    // Ordenar jogo final em ordem crescente
+    // Ordena o bilhete de forma crescente
     escolhidos.sort((a, b) => a - b);
 
-    // Exibir na tela
+    // Renderiza as dezenas na tela
     const resultadoArea = document.getElementById('resultadoArea');
     const dezenasSorteadas = document.getElementById('dezenasSorteadas');
     dezenasSorteadas.innerHTML = '';
@@ -111,6 +120,9 @@ function gerarAposta() {
     
     resultadoArea.style.display = 'block';
 }
+
+// Executa a busca assim que o site abre
+carregarResultados();
 </script>
 </body>
 </html>
