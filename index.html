@@ -20,7 +20,7 @@
 
 <div class="container">
     <h1>Gerador Lotofácil Automático</h1>
-    <div class="status" id="statusConcurso">🔄 Conectando à API da Caixa...</div>
+    <div class="status" id="statusConcurso">🔄 Buscando resultados na Caixa Econômica... <span id="progresso">0/7</span></div>
 
     <button id="btnGerar" onclick="gerarAposta()" disabled>Carregando Resultados...</button>
 
@@ -33,23 +33,42 @@
 <script>
 let listaConcursos = [];
 
-// Função que busca os dados da internet assim que a página abre
 async function carregarResultados() {
     const statusText = document.getElementById('statusConcurso');
+    const progressoText = document.getElementById('progresso');
     const btn = document.getElementById('btnGerar');
     
     try {
-        // Consome uma API pública e gratuita de loterias
-        const resposta = response = await fetch('https://guidi.dev.br');
-        if (!resposta.ok) throw new Error('Erro na requisição');
+        // 1. Busca o último concurso oficial diretamente do endpoint público da Caixa
+        const urlUltimo = 'https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil';
+        const respostaUltimo = await fetch(urlUltimo);
+        if (!respostaUltimo.ok) throw new Error('Erro ao acessar servidor da Caixa');
+        const dadosUltimo = await respostaUltimo.json();
         
-        const dados = await resposta.json();
-        
-        // Formata os dados recebidos para o nosso algoritmo
-        listaConcursos = dados.map(c => c.dezenas.map(Number));
-        
-        const ultimoConcursoNum = dados[0].concurso;
-        statusText.innerHTML = `✅ Conectado! Último concurso carregado: <strong>Nº ${ultimoConcursoNum}</strong>`;
+        let numeroConcursoAtual = parseInt(dadosUltimo.numero);
+        let dezenasUltimo = dadosUltimo.listaDezenas.map(Number);
+        listaConcursos.push(dezenasUltimo);
+        progressoText.innerText = "1/7";
+
+        // 2. Busca retroativamente os 6 concursos anteriores
+        for (let i = 1; i < 7; i++) {
+            let concursoAlvo = numeroConcursoAtual - i;
+            try {
+                const urlHistorico = `https://caixa.gov.br{concursoAlvo}`;
+                const respostaHist = await fetch(urlHistorico);
+                if (respostaHist.ok) {
+                    const dadosHist = await respostaHist.json();
+                    listaConcursos.push(dadosHist.listaDezenas.map(Number));
+                }
+            } catch (e) {
+                console.warn(`Falha temporária ao coletar concurso ${concursoAlvo}`);
+            }
+            progressoText.innerText = `${listaConcursos.length}/7`;
+        }
+
+        if (listaConcursos.length < 4) throw new Error('Dados insuficientes coletados.');
+
+        statusText.innerHTML = `✅ Conectado! Último concurso carregado com sucesso: <strong>Nº ${numeroConcursoAtual}</strong>`;
         statusText.style.background = '#e8f5e9';
         statusText.style.color = '#208d45';
         
@@ -57,7 +76,7 @@ async function carregarResultados() {
         btn.disabled = false;
     } catch (erro) {
         console.error(erro);
-        statusText.innerHTML = "❌ Erro ao buscar resultados. Tente atualizar a página.";
+        statusText.innerHTML = "❌ Erro ao conectar com a Caixa. Verifique sua conexão e atualize a página.";
         statusText.style.background = '#ffebee';
         statusText.style.color = '#c62828';
         btn.innerText = "Falha ao carregar";
@@ -65,8 +84,9 @@ async function carregarResultados() {
 }
 
 function gerarAposta() {
-    if (listaConcursos.length < 7) return;
+    if (listaConcursos.length === 0) return;
 
+    // O primeiro item do array é o último sorteio
     const ultimoResultado = listaConcursos[0];
     let escolhidos = [];
 
@@ -77,7 +97,7 @@ function gerarAposta() {
         escolhidos.push(poolUltimo.splice(idx, 1)[0]);
     }
 
-    // 2. Descobre números não sorteados no último concurso (Sorteia 3 deles)
+    // 2. Descobre números não sorteados no último concurso (precisa escolher 3)
     let todosNumeros = Array.from({length: 25}, (_, i) => i + 1);
     let naoSorteadosUltimo = todosNumeros.filter(n => !ultimoResultado.includes(n));
 
@@ -87,7 +107,7 @@ function gerarAposta() {
         escolhidos.push(poolNaoSorteados.splice(idx, 1)[0]);
     }
 
-    // 3. Mapeia a frequência de saídas nos últimos 7 concursos
+    // 3. Mapeia a frequência de saídas no histórico coletado
     let frequencias = {};
     todosNumeros.forEach(n => frequencias[n] = 0);
     
@@ -95,20 +115,20 @@ function gerarAposta() {
         concurso.forEach(num => { if(frequencias[num] !== undefined) frequencias[num]++; });
     });
 
-    // Filtra para pegar os mais frequentes excluindo os que já foram selecionados
+    // Filtra os mais frequentes descartando os que já foram inseridos nas outras regras
     let maisQuentesDisponiveis = todosNumeros
         .filter(n => !escolhidos.includes(n))
         .sort((a, b) => frequencias[b] - frequencias[a]);
 
-    // Adiciona as 3 dezenas mais quentes restantes
+    // Completa o bilhete até fechar as 15 dezenas
     for(let i = 0; i < 3; i++) {
         if(maisQuentesDisponiveis[i]) escolhidos.push(maisQuentesDisponiveis[i]);
     }
 
-    // Ordena o bilhete de forma crescente
+    // Ordena o bilhete final
     escolhidos.sort((a, b) => a - b);
 
-    // Renderiza as dezenas na tela
+    // Mostra as bolas com o sorteio estratégico na tela
     const resultadoArea = document.getElementById('resultadoArea');
     const dezenasSorteadas = document.getElementById('dezenasSorteadas');
     dezenasSorteadas.innerHTML = '';
@@ -121,7 +141,7 @@ function gerarAposta() {
     resultadoArea.style.display = 'block';
 }
 
-// Executa a busca assim que o site abre
+// Inicializa a varredura ao abrir a página
 carregarResultados();
 </script>
 </body>
